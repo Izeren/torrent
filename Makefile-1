@@ -1,0 +1,9 @@
+All: server
+server: server.o msg.o stringf.o
+	g++ -o server server.o msg.o stringf.o
+server.o: server.cpp
+	g++ -c server.cpp
+msg.o: msg.cpp
+	g++ -c msg.cpp
+stringf.o: stringf.cpp
+	g++ -c stringf.cpp

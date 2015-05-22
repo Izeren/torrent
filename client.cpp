@@ -17,6 +17,7 @@
 #include <openssl/md5.h>
 #include <map>
 #include <fstream>
+#include <utility>
 
 const int BufferSize = 100;
 const int BlockSize = 100000;
@@ -39,7 +40,7 @@ int FD;//FileDescriptor
 
 typedef std::string Hash_t;////////////////////////////потом убрать
 
-std::map<Hash_t, pair<int, std::string> > DataBase;
+std::map<Hash_t, std::pair<int, std::string> > DataBase;
 
 //Get size of file descriptor
 unsigned long GetSizeByFD(int FD) {
@@ -78,8 +79,13 @@ void* UploadRequest(void *p) {
 
 void* CreateRequest(void *p) {
 	unsigned char ResultingHash[MD5_DIGEST_LENGTH];
-
+	std::string TorrentFile;
 	File = Commands[1];
+	TorrentFile = File;
+	TorrentFile.erase(TorrentFile.begin() + TorrentFile.find_last_of(".", 0), TorrentFile.end());
+
+	std::cout << TorrentFile << std::endl;
+
 	int FD = open(File.c_str(), O_RDONLY);
 	if (FD < 0)
 		exit(-1);
@@ -108,6 +114,7 @@ void* CreateRequest(void *p) {
 }
 
 int main() {
+	
 	ClientIP = "127.0.0.1";
 
 	struct sockaddr_in ServAddr;
@@ -139,7 +146,7 @@ int main() {
 		del_extra_white_spaces(Command);
 		Commands.resize(0);
 		parse_by_white_spaces(Command, Commands);
-		print_list(Commands, std::cout);
+		//print_list(Commands, std::cout);
 		IdCommand = NumberCommands;
 		for (int i = 0; i < NumberCommands; ++i) {
 			if (Commands[0] == UserCommands[i]) {
