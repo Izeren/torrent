@@ -1,6 +1,6 @@
 All: server
 server: server.o msg.o stringf.o
-	g++ -o server server.o msg.o stringf.o
+	g++ -o server server.o msg.o stringf.o -lpthread
 server.o: server.cpp
 	g++ -c server.cpp
 msg.o: msg.cpp
