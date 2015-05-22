@@ -18,9 +18,11 @@
 #include <map>
 #include <fstream>
 #include <utility>
+#include <fstream>
+#include <iomanip>
 
 const int BufferSize = 100;
-const int BlockSize = 100000;
+const int BlockSize = 4 * 1024;
 const int NumberCommands = 4;
 //Commands: 1 - download file;
 //			2 - upload file;
@@ -37,10 +39,23 @@ list UserCommands, Commands;
 bool ClientIsFree = true, Error = 0;
 int IdCommand = NumberCommands;
 int FD;//FileDescriptor
+struct sockaddr_in ServAddr;
 
 typedef std::string Hash_t;////////////////////////////потом убрать
 
 std::map<Hash_t, std::pair<int, std::string> > DataBase;
+
+void printMD5(unsigned char *Buffer) {
+	for (int i = 0; i < MD5_DIGEST_LENGTH; ++i) {
+		std::cout << std::hex << (int) Buffer[i];
+	}
+}
+
+void PrintMD5ToFile(unsigned char *Buffer, std::ofstream &out) {
+	for (int i = 0; i < MD5_DIGEST_LENGTH; ++i) {
+		out << std::hex << (int) Buffer[i];
+	}	
+}
 
 //Get size of file descriptor
 unsigned long GetSizeByFD(int FD) {
@@ -52,10 +67,17 @@ unsigned long GetSizeByFD(int FD) {
 }
 
 void* DownloadRequest(void *p) {
+	connect(FD, (const sockaddr *) &ServAddr, sizeof(ServAddr));
+
 	SendStr(FD, Commands[0] + " Valera a][uenen!\n");
+
+	close(FD);
 }
 
 void* UploadRequest(void *p) {
+
+	connect(FD, (const sockaddr *) &ServAddr, sizeof(ServAddr));
+
 	SendStr(FD, Commands[0]);
 	SendStr(FD, ClientIP);
 	SendStr(FD, ClientPort);
@@ -65,7 +87,7 @@ void* UploadRequest(void *p) {
 	int BlockNumbers;
 	fin >> BlockNumbers;
 
-	SendStr(FD, itos(BlockNumbers));
+	SendInt(FD, BlockNumbers);
 
 	for (int i = 0; i < BlockNumbers; ++i) {
 		Hash_t Hash;
@@ -75,6 +97,8 @@ void* UploadRequest(void *p) {
 	fin.close();
 
 	SendStr(FD, Commands[0]);
+
+	close(FD);
 }
 
 void* CreateRequest(void *p) {
@@ -82,42 +106,56 @@ void* CreateRequest(void *p) {
 	std::string TorrentFile;
 	File = Commands[1];
 	TorrentFile = File;
-	TorrentFile.erase(TorrentFile.begin() + TorrentFile.find_last_of(".", 0), TorrentFile.end());
-
+	TorrentFile.erase(TorrentFile.begin() + TorrentFile.find_last_of("."), TorrentFile.end());
+	TorrentFile += ".torrent";
 	std::cout << TorrentFile << std::endl;
+
+	std::ofstream fout(TorrentFile.c_str());
 
 	int FD = open(File.c_str(), O_RDONLY);
 	if (FD < 0)
 		exit(-1);
-
 	FileSize = GetSizeByFD(FD);
+
 	int SizeLastBlock = FileSize % BlockSize;
 	if (SizeLastBlock == 0)
 		SizeLastBlock = BlockSize;
 
 	std::string FileBuffer;
-	int NumberBlocks = FileSize / BlockSize + (FileSize % BlockSize > 0);
+
+	int NumberBlocks = FileSize / BlockSize; 
+	if (FileSize % BlockSize > 0)
+		++NumberBlocks;
+
+	fout << NumberBlocks << "\n";
+	std::cout << "before for \n";
 
 	for (int i = 0; i < NumberBlocks - 1; ++i) {
-		FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, BlockSize * i);
-		MD5((unsigned char*)FileBuffer.c_str(), FileSize, ResultingHash);
-		munmap((void*)FileBuffer.c_str(), FileSize);
+		FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, i * BlockSize);
+		MD5((unsigned char*)FileBuffer.c_str(), BlockSize, ResultingHash);
+		PrintMD5ToFile(ResultingHash, fout);
+		fout << " ";
+		munmap((void*)FileBuffer.c_str(), BlockSize);
 		std::string HashString((char*)ResultingHash);
 		DataBase[HashString] = make_pair(i, File);
 	}
-	FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, BlockSize * (NumberBlocks - 2));
-	MD5((unsigned char*)FileBuffer.c_str(), BlockSize, ResultingHash);
+	std::cout << "after for \n";
+	FileBuffer = (char*)mmap(0, SizeLastBlock, PROT_READ, MAP_SHARED, FD, BlockSize * (NumberBlocks - 1));
+	std::cout << "point 1 \n";
+	
+	MD5((unsigned char*)FileBuffer.c_str(), SizeLastBlock, ResultingHash);
+	PrintMD5ToFile(ResultingHash, fout);
+	fout << " ";
 	munmap((void*)FileBuffer.c_str(), SizeLastBlock);
 	std::string HashString((char*)ResultingHash);
 	DataBase[HashString] = make_pair(NumberBlocks - 1, File);
 
+	fout.close();
 }
 
 int main() {
 	
 	ClientIP = "127.0.0.1";
-
-	struct sockaddr_in ServAddr;
 
 	memset(&ServAddr, 0, sizeof(ServAddr)); //set all bits to 0;
 	ServAddr.sin_family = AF_INET; //IPV4
@@ -131,8 +169,6 @@ int main() {
 
 	FD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); //open socket
 
-	connect(FD, (const sockaddr *) &ServAddr, sizeof(ServAddr));
-
 	Command.reserve(BufferSize);
 	UserCommands.resize(NumberCommands);
 	UserCommands[0] = "exit";
@@ -143,10 +179,12 @@ int main() {
 	while(1) {
 		std::cout << "while_begin\n";
 		getline(std::cin, Command);
+		std::cout << "$" << Command << "$\n";
 		del_extra_white_spaces(Command);
 		Commands.resize(0);
+
 		parse_by_white_spaces(Command, Commands);
-		//print_list(Commands, std::cout);
+		print_list(Commands, std::cout);
 		IdCommand = NumberCommands;
 		for (int i = 0; i < NumberCommands; ++i) {
 			if (Commands[0] == UserCommands[i]) {
