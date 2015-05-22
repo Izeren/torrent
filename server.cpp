@@ -12,6 +12,7 @@
 #include <set>
 #include <fstream>
 #include <utility>
+#include <iterator>
 
 typedef std::string Hash_t;
 typedef std::string Port_t;
@@ -21,6 +22,51 @@ typedef std::map<Hash_t, std::set<Addr_t> > DataBase_t;
 
 int NOT_END_OF_WORK = 1;
 DataBase_t DataBase;
+struct sockaddr_in servAddr;
+
+void InitServerAddr(uint Port, sockaddr_in &servAddr);
+
+void InitClientAddr(uint Port, unsigned IP, sockaddr_in &ClientAddr);
+
+void LoadData(std::string &Path);
+
+void SaveData(std::string &Path);
+
+void *ClientsProcessing(void *argv);
+
+int GetRandLR(int Left, int Right);
+
+int GetRandN(int Number);
+
+
+int main() {
+
+	pthread_t ClientsProcessingThread;
+	pthread_create(&ClientsProcessingThread, NULL, ClientsProcessing, NULL);
+	std::string Command;
+	while(std::getline(std::cin, Command)) {
+		if (Command == "exit") {
+			NOT_END_OF_WORK = 0;
+			pthread_join(ClientsProcessingThread, NULL);
+			std::cout << "Closing server\n";
+			break;
+		}
+		else {
+			std::cout << Command << "\n";
+		}
+	}
+	
+
+	return 0;
+}
+
+int GetRandN(int Number) {
+	return rand() * rand() % Number;
+}
+
+int GetRandLR(int Left, int Right) {
+	return Left + GetRandN(Right - Left);
+}
 
 
 void InitServerAddr(uint Port, sockaddr_in &servAddr) {
@@ -76,8 +122,6 @@ void SaveData(std::string &Path) {
 	fout.close();
 }
 
-struct sockaddr_in servAddr;
-
 void *ClientsProcessing(void *argv) {
 	InitServerAddr(1337, servAddr);
 
@@ -99,8 +143,15 @@ void *ClientsProcessing(void *argv) {
 		ReceiveStr(confd, Command);
 		if (Command == "download") {
 			int NumberOfBlocks = ReceiveInt(confd);
-			
-			//process download;
+			for (int i = 0; i < NumberOfBlocks; ++i) {
+				Hash_t Hash;
+				ReceiveStr(confd, Hash);
+				std::set<Addr_t> &AddrSet = DataBase[Hash];
+				int SetSize = AddrSet.size();
+				int UserNumber = GetRandN(SetSize);
+				SendStr(confd, (AddrSet.begin() + UserNumber)->first);
+				SendStr(confd, (AddrSet.begin() + UserNumber)->second);
+			}
 
 		} else if (Command == "upload") {
 
@@ -118,26 +169,4 @@ void *ClientsProcessing(void *argv) {
 
 		close(confd);
 	}
-}
-
-
-int main() {
-
-	pthread_t ClientsProcessingThread;
-	pthread_create(&ClientsProcessingThread, NULL, ClientsProcessing, NULL);
-	std::string Command;
-	while(std::getline(std::cin, Command)) {
-		if (Command == "exit") {
-			NOT_END_OF_WORK = 0;
-			pthread_join(ClientsProcessingThread, NULL);
-			std::cout << "Closing server\n";
-			break;
-		}
-		else {
-			std::cout << Command << "\n";
-		}
-	}
-	
-
-	return 0;
 }
