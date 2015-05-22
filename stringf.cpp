@@ -95,7 +95,7 @@ void write_str(int fd, std::string str) {
 
 std::string itos(int Number) {
 	std::string result;
-	While (Number) {
+	while (Number) {
 		result += Number % 10;
 		Number /= 10;
 	}

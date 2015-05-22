@@ -5,6 +5,7 @@
 #include <vector>
 #include <iostream>
 #include <unistd.h>
+#include <algorithm>
 
 typedef std::vector<std::string> list;
 typedef std::vector<list> list_arr_t;

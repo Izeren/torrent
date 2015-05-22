@@ -37,8 +37,9 @@ bool ClientIsFree = true, Error = 0;
 int IdCommand = NumberCommands;
 int FD;//FileDescriptor
 
-
 typedef std::string Hash_t;////////////////////////////потом убрать
+
+std::map<Hash_t, pair<int, std::string> > DataBase;
 
 //Get size of file descriptor
 unsigned long GetSizeByFD(int FD) {
@@ -63,9 +64,7 @@ void* UploadRequest(void *p) {
 	int BlockNumbers;
 	fin >> BlockNumbers;
 
-	char Buffer[10];
-	itoa(BlockNumbers, Buffer, 10);
-	SendStr(FD, std::string(Buffer));
+	SendStr(FD, itos(BlockNumbers));
 
 	for (int i = 0; i < BlockNumbers; ++i) {
 		Hash_t Hash;
@@ -94,15 +93,17 @@ void* CreateRequest(void *p) {
 	int NumberBlocks = FileSize / BlockSize + (FileSize % BlockSize > 0);
 
 	for (int i = 0; i < NumberBlocks - 1; ++i) {
-		FileBuffer = mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, BlockSize * i);
-		MD5((unsigned char*)FileBuffer, FileSize, ResultingHash);
-		munmap(FileBuffer, FileSize);
-		std::stringHashString(ResultingHash);
+		FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, BlockSize * i);
+		MD5((unsigned char*)FileBuffer.c_str(), FileSize, ResultingHash);
+		munmap((void*)FileBuffer.c_str(), FileSize);
+		std::string HashString((char*)ResultingHash);
+		DataBase[HashString] = make_pair(i, File);
 	}
-	FileBuffer = mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, BlockSize * (NumberBlocks - 2));
-	MD5((unsigned char*)FileBuffer, BlockSize, ResultingHash);
-	munmap(FileBuffer, SizeLastBlock);
-	std::string HashString(ResultingHash);
+	FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, BlockSize * (NumberBlocks - 2));
+	MD5((unsigned char*)FileBuffer.c_str(), BlockSize, ResultingHash);
+	munmap((void*)FileBuffer.c_str(), SizeLastBlock);
+	std::string HashString((char*)ResultingHash);
+	DataBase[HashString] = make_pair(NumberBlocks - 1, File);
 
 }
 
