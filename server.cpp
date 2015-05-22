@@ -9,7 +9,6 @@
 #include "stringf.h"
 #include "msg.h"
 #include <map>
-#include <set>
 #include <fstream>
 #include <utility>
 #include <iterator>
@@ -18,7 +17,7 @@ typedef std::string Hash_t;
 typedef std::string Port_t;
 typedef std::string IP_t;
 typedef std::pair<Port_t, IP_t> Addr_t;
-typedef std::map<Hash_t, std::set<Addr_t> > DataBase_t;
+typedef std::map<Hash_t, std::vector<Addr_t> > DataBase_t;
 
 int NOT_END_OF_WORK = 1;
 DataBase_t DataBase;
@@ -97,7 +96,7 @@ void LoadData(std::string &Path) {
 		for (int j = 0; j < SetSize; ++j) {
 			Addr_t Addr;
 			fin >> Addr.first >> Addr.second;
-			DataBase[Hash].insert(Addr);
+			DataBase[Hash].push_back(Addr);
 		}
 	}
 	fin.close();
@@ -107,14 +106,14 @@ void SaveData(std::string &Path) {
 	std::ofstream fout(Path.c_str());
 	int BlockNumbers = DataBase.size();
 	fout << BlockNumbers << "\n";
-	std::map<Hash_t, std::set<Addr_t> >::iterator it;
+	DataBase_t::iterator it;
 	for (it = DataBase.begin(); it != DataBase.end(); ++it) {
 		fout << (*it).first << " ";
 		int SetSize = (*it).second.size();
 		fout << SetSize;
-		std::set<Addr_t> &CurSet = (*it).second; 
-		std::set<Addr_t>::iterator it1;
-		for (it1 = CurSet.begin(); it1 != CurSet.end(); ++it1) {
+		std::vector<Addr_t> &CurVector = (*it).second; 
+		std::vector<Addr_t>::iterator it1;
+		for (it1 = CurVector.begin(); it1 != CurVector.end(); ++it1) {
 			fout << " " << (*it1).first << " " << (*it1).second;
 		}
 		fout << "\n";
@@ -146,11 +145,11 @@ void *ClientsProcessing(void *argv) {
 			for (int i = 0; i < NumberOfBlocks; ++i) {
 				Hash_t Hash;
 				ReceiveStr(confd, Hash);
-				std::set<Addr_t> &AddrSet = DataBase[Hash];
-				int SetSize = AddrSet.size();
-				int UserNumber = GetRandN(SetSize);
-				SendStr(confd, (AddrSet.begin() + UserNumber)->first);
-				SendStr(confd, (AddrSet.begin() + UserNumber)->second);
+				std::vector<Addr_t> &AddrVector = DataBase[Hash];
+				int VectorSize = AddrVector.size();
+				int UserNumber = GetRandN(VectorSize);
+				SendStr(confd, AddrVector[UserNumber].first);
+				SendStr(confd, AddrVector[UserNumber].second);
 			}
 
 		} else if (Command == "upload") {
@@ -163,7 +162,7 @@ void *ClientsProcessing(void *argv) {
 			for (int i = 0; i < NumberOfBlocks; ++i) {
 				Hash_t Hash;
 				ReceiveStr(confd, Hash);
-				DataBase[Hash].insert(std::make_pair(IP, Port));
+				DataBase[Hash].push_back(std::make_pair(IP, Port));
 			}
 		}	
 
