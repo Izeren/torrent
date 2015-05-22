@@ -98,12 +98,13 @@ void *ClientsProcessing(void *argv) {
 		
 		ReceiveStr(confd, Command);
 		if (Command == "download") {
+			int NumberOfBlocks = ReceiveInt(confd);
+			
 			//process download;
 
 		} else if (Command == "upload") {
-			std::string BlocksNumber;
-			ReceiveStr(confd, BlocksNumber);
-			int NumberOfBlocks = atoi(BlocksNumber.c_str());
+
+			int NumberOfBlocks = ReceiveInt(confd);
 			IP_t IP;
 			Port_t Port;
 			ReceiveStr(confd, IP);

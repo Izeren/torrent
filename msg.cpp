@@ -73,7 +73,7 @@ int ReceivePcktMsg(int ConnectionFD, char **Msg, int Flags) {
 
 	uint32_t *length = new uint32_t;
 	int WasRecvd = ReceiveMsg(ConnectionFD, (void *) length, 4, Flags);
-	uint32_t Len = ntohl((uint32_t) *length);
+	uint32_t Len = ntohl(*length);
 
 	(*Msg) = new char[Len + 1];
 	(*Msg)[Len] = '\0';
@@ -83,5 +83,33 @@ int ReceivePcktMsg(int ConnectionFD, char **Msg, int Flags) {
 
 	return WasRecvd;
 
+}
+
+int ReceiveInt(int FD) {
+	unsigned int *Number = new unsigned int;
+	ReceiveMsg(FD, (void *) Number, sizeof(int));
+	int Result = (int) htonl(*Number);
+	delete Number;
+	return Result;
+}
+
+void SendInt(int FD, int Number) {
+	unsigned int *Buffer = new unsigned int;
+	*Buffer = htonl(Number);
+	SendMsg(FD, (const void *) Buffer, sizeof(int));
+}
+
+long ReceiveLong(int FD) {
+	unsigned long *Number = new unsigned long;
+	ReceiveMsg(FD, (void *) Number, sizeof(long));
+	long Result = (long) htonl(*Number);
+	delete Number;
+	return Result;
+}
+
+void SendLong(int FD, long Number) {
+	unsigned long *Buffer = new unsigned long;
+	*Buffer = htonl(Number);
+	SendMsg(FD, (const void *) Buffer, sizeof(long));
 }
 

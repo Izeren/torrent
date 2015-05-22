@@ -21,4 +21,12 @@ int ReceiveMsg(int ConnectionFD, void *Buffer, int Len, int Flags = 0);
 
 int ReceivePcktMsg(int ConnectionFD, char **Msg, int Flags = 0);
 
+int ReceiveInt(int FD);
+
+void SendInt(int FD, int Number);
+
+long ReceiveLong(int FD);
+
+void SendLong(int FD, long Number);
+
 #endif //msg

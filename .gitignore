@@ -1,3 +1,9 @@
 *.o
 *.txt
 *.torrent
+client
+hw
+md5.cpp
+md5
+server
+test
