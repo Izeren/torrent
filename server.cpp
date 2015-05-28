@@ -27,9 +27,9 @@ void InitServerAddr(uint Port, sockaddr_in &servAddr);
 
 void InitClientAddr(uint Port, unsigned IP, sockaddr_in &ClientAddr);
 
-void LoadData(std::string &Path);
+void LoadData(std::string Path);
 
-void SaveData(std::string &Path);
+void SaveData(std::string Path);
 
 void *ClientsProcessing(void *argv);
 
@@ -39,6 +39,7 @@ int GetRandN(int Number);
 
 
 int main() {
+	LoadData(std::string("ServerDataBase.txt"));
 
 	pthread_t ClientsProcessingThread;
 	pthread_create(&ClientsProcessingThread, NULL, ClientsProcessing, NULL);
@@ -46,7 +47,7 @@ int main() {
 	while(std::getline(std::cin, Command)) {
 		if (Command == "exit") {
 			NOT_END_OF_WORK = 0;
-			pthread_join(ClientsProcessingThread, NULL);
+			//pthread_join(ClientsProcessingThread, NULL);
 			std::cout << "Closing server\n";
 			break;
 		}
@@ -54,6 +55,7 @@ int main() {
 			std::cout << Command << "\n";
 		}
 	}
+	SaveData(std::string("ServerDataBase.txt"));
 	
 
 	return 0;
@@ -84,7 +86,7 @@ void InitClientAddr(uint Port, unsigned IP, sockaddr_in &ClientAddr) {
 
 
 
-void LoadData(std::string &Path) {
+void LoadData(std::string Path) {
 	std::ifstream fin(Path.c_str());
 	int BlockNumbers;
 	fin >> BlockNumbers;
@@ -102,7 +104,7 @@ void LoadData(std::string &Path) {
 	fin.close();
 }
 
-void SaveData(std::string &Path) {
+void SaveData(std::string Path) {
 	std::ofstream fout(Path.c_str());
 	int BlockNumbers = DataBase.size();
 	fout << BlockNumbers << "\n";
@@ -129,11 +131,12 @@ void *ClientsProcessing(void *argv) {
 	bind(fd, (const sockaddr *) &servAddr, sizeof(servAddr));
 	listen(fd, 10);
 	std::string Command;
+	int counter = 1;
 	while(NOT_END_OF_WORK) {
 		int confd = accept(fd, 0, 0);
 
 		if (confd > 0) {
-			std::cout << "Processing client\n";
+			std::cout << "Connection " << counter << " opened\n";
 		}
 		else if (confd < 0) {
 			continue;
@@ -141,6 +144,7 @@ void *ClientsProcessing(void *argv) {
 		
 		ReceiveStr(confd, Command);
 		if (Command == "download") {
+			std::cout << "Command recognized: download\n";
 			int NumberOfBlocks = ReceiveInt(confd);
 			for (int i = 0; i < NumberOfBlocks; ++i) {
 				Hash_t Hash;
@@ -153,19 +157,27 @@ void *ClientsProcessing(void *argv) {
 			}
 
 		} else if (Command == "upload") {
-
-			int NumberOfBlocks = ReceiveInt(confd);
+			std::cout << "Command recognized: upload\n";
 			IP_t IP;
 			Port_t Port;
 			ReceiveStr(confd, IP);
 			ReceiveStr(confd, Port);
+			int NumberOfBlocks = ReceiveInt(confd);
+
+			std::cout << "IP: " << IP << " Port: " << Port << "\n";
+			std::cout << "NumberOfBlocks: " << NumberOfBlocks << "\n";
+			
 			for (int i = 0; i < NumberOfBlocks; ++i) {
 				Hash_t Hash;
 				ReceiveStr(confd, Hash);
+				std::cout << "Hash received: " << Hash << "\n";
 				DataBase[Hash].push_back(std::make_pair(IP, Port));
 			}
 		}	
 
 		close(confd);
+		std::cout << "Connection " << counter << " closed\n";
+		++counter;
+
 	}
 }

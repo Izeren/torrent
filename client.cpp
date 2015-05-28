@@ -20,6 +20,7 @@
 #include <utility>
 #include <fstream>
 #include <iomanip>
+#include <sstream>
 
 const int BufferSize = 100;
 const int BlockSize = 4 * 1024;
@@ -42,8 +43,10 @@ int FD;//FileDescriptor
 struct sockaddr_in ServAddr;
 
 typedef std::string Hash_t;////////////////////////////потом убрать
+typedef std::map<Hash_t, std::pair<int, std::string> > ClientDataBase_t;
 
-std::map<Hash_t, std::pair<int, std::string> > DataBase;
+
+ClientDataBase_t DataBase;
 
 void printMD5(unsigned char *Buffer) {
 	for (int i = 0; i < MD5_DIGEST_LENGTH; ++i) {
@@ -55,6 +58,16 @@ void PrintMD5ToFile(unsigned char *Buffer, std::ofstream &out) {
 	for (int i = 0; i < MD5_DIGEST_LENGTH; ++i) {
 		out << std::hex << (int) Buffer[i];
 	}	
+}
+
+std::string HashToString(unsigned char *Buffer) {
+	std::stringstream temp;
+	for (int i = 0; i < MD5_DIGEST_LENGTH; ++i) {
+		temp << std::hex << (int) Buffer[i];
+	}	
+	Hash_t Hash;
+	temp >> Hash;
+	return Hash;
 }
 
 //Get size of file descriptor
@@ -82,7 +95,7 @@ void* UploadRequest(void *p) {
 	SendStr(FD, ClientIP);
 	SendStr(FD, ClientPort);
 
-	File = Command[1];
+	File = Commands[1];
 	std::ifstream fin(File.c_str());
 	int BlockNumbers;
 	fin >> BlockNumbers;
@@ -101,13 +114,105 @@ void* UploadRequest(void *p) {
 	close(FD);
 }
 
-void* CreateRequest(void *p) {
-	unsigned char ResultingHash[MD5_DIGEST_LENGTH];
-	std::string TorrentFile;
-	File = Commands[1];
-	TorrentFile = File;
+// void* CreateRequest(void *p) {
+// 	unsigned char ResultingHash[MD5_DIGEST_LENGTH];
+// 	std::string TorrentFile;
+// 	File = Commands[1];
+// 	TorrentFile = File;
+// 	TorrentFile.erase(TorrentFile.begin() + TorrentFile.find_last_of("."), TorrentFile.end());
+// 	TorrentFile += ".torrent";
+// 	std::cout << TorrentFile << std::endl;
+
+// 	std::ofstream fout(TorrentFile.c_str());
+
+// 	int FD = open(File.c_str(), O_RDONLY);
+// 	if (FD < 0)
+// 		exit(-1);
+// 	FileSize = GetSizeByFD(FD);
+
+// 	int SizeLastBlock = FileSize % BlockSize;
+// 	if (SizeLastBlock == 0)
+// 		SizeLastBlock = BlockSize;
+
+// 	std::string FileBuffer;
+
+// 	int NumberBlocks = FileSize / BlockSize; 
+// 	if (FileSize % BlockSize > 0)
+// 		++NumberBlocks;
+
+// 	fout << NumberBlocks << "\n";
+
+// 	for (int i = 0; i < NumberBlocks - 1; ++i) {
+// 		FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, i * BlockSize);
+// 		memset(ResultingHash, 0, MD5_DIGEST_LENGTH);
+// 		MD5((unsigned char*)FileBuffer.c_str(), BlockSize, ResultingHash);
+// 		Hash_t HashString = HashToString(ResultingHash);
+// 		if (i == 0) {
+// 			std::ofstream testout("First_block");
+// 			for (int j = 0; j < BlockSize; ++j) {
+// 				testout << std::hex << (int) FileBuffer[j];
+// 			}
+
+// 			testout << "\n\n\n";
+// 			testout << HashString;
+// 			testout.close();
+// 		}
+// 		std::cout << std::endl;
+// 		std::cout << HashString << "\n";
+// 		fout << std::hex << HashString << " ";
+// 		// Hash_t HashString = (const char *) ResultingHash;
+// 		// fout << HashString << " ";
+// 		munmap((void*)FileBuffer.c_str(), BlockSize);
+// 		DataBase[HashString] = make_pair(i, File);
+// 	}
+// 	FileBuffer = (char*)mmap(0, SizeLastBlock, PROT_READ, MAP_SHARED, FD, BlockSize * (NumberBlocks - 1));
+// 	memset(ResultingHash, 0, MD5_DIGEST_LENGTH);
+// 	MD5((unsigned char*)FileBuffer.c_str(), SizeLastBlock, ResultingHash);
+// 	Hash_t HashString = HashToString(ResultingHash);
+// 	std::cout << HashString << "\n";
+// 	fout << std::hex << HashString << " ";
+// 	// Hash_t HashString = (const char *)ResultingHash;
+// 	// fout << HashString << " ";
+// 	munmap((void*)FileBuffer.c_str(), SizeLastBlock);
+	
+// 	DataBase[HashString] = make_pair(NumberBlocks - 1, File);
+
+// 	fout.close();
+// }
+
+std::string GetTorrentName(std::string &File) {
+
+	std::string TorrentFile = File;
 	TorrentFile.erase(TorrentFile.begin() + TorrentFile.find_last_of("."), TorrentFile.end());
 	TorrentFile += ".torrent";
+
+	return TorrentFile;
+}
+
+int CalculateLastBlockSize() {
+	int SizeLastBlock = FileSize % BlockSize;
+	if (SizeLastBlock == 0)
+		SizeLastBlock = BlockSize;
+	return SizeLastBlock	
+}
+
+int CalculateNumberBlocks() {
+	return FileSize / BlockSize + (int) (FileSize % BlockSize > 0);
+}
+
+void MakeHashOfFileBlock(std::string &File, int BlockID, Hash_t &Hash) {
+	FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, Block_ID * BlockSize);
+	MD5((unsigned char*)FileBuffer.c_str(), BlockSize, ResultingHash);
+	Hash_t Hash = HashToString(ResultingHash);
+}
+
+
+void* CreateRequest(void *p) {
+	unsigned char ResultingHash[MD5_DIGEST_LENGTH];
+	File = Commands[1];
+
+	std::string TorrentFile = GetTorrentName(File);
+
 	std::cout << TorrentFile << std::endl;
 
 	std::ofstream fout(TorrentFile.c_str());
@@ -115,45 +220,85 @@ void* CreateRequest(void *p) {
 	int FD = open(File.c_str(), O_RDONLY);
 	if (FD < 0)
 		exit(-1);
+
 	FileSize = GetSizeByFD(FD);
-
-	int SizeLastBlock = FileSize % BlockSize;
-	if (SizeLastBlock == 0)
-		SizeLastBlock = BlockSize;
-
+	int NumberBlocks = CalculateNumberBlocks();
+	int SizeLastBlock = CalculateLastBlockSize();
 	std::string FileBuffer;
 
-	int NumberBlocks = FileSize / BlockSize; 
-	if (FileSize % BlockSize > 0)
-		++NumberBlocks;
-
 	fout << NumberBlocks << "\n";
-	std::cout << "before for \n";
 
 	for (int i = 0; i < NumberBlocks - 1; ++i) {
 		FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, i * BlockSize);
+		memset(ResultingHash, 0, MD5_DIGEST_LENGTH);
 		MD5((unsigned char*)FileBuffer.c_str(), BlockSize, ResultingHash);
-		PrintMD5ToFile(ResultingHash, fout);
-		fout << " ";
+		Hash_t HashString = HashToString(ResultingHash);
+		if (i == 0) {
+			std::ofstream testout("First_block");
+			for (int j = 0; j < BlockSize; ++j) {
+				testout << std::hex << (int) FileBuffer[j];
+			}
+
+			testout << "\n\n\n";
+			testout << HashString;
+			testout.close();
+		}
+		std::cout << std::endl;
+		std::cout << HashString << "\n";
+		fout << std::hex << HashString << " ";
+		// Hash_t HashString = (const char *) ResultingHash;
+		// fout << HashString << " ";
 		munmap((void*)FileBuffer.c_str(), BlockSize);
-		std::string HashString((char*)ResultingHash);
 		DataBase[HashString] = make_pair(i, File);
 	}
-	std::cout << "after for \n";
 	FileBuffer = (char*)mmap(0, SizeLastBlock, PROT_READ, MAP_SHARED, FD, BlockSize * (NumberBlocks - 1));
-	std::cout << "point 1 \n";
-	
+	memset(ResultingHash, 0, MD5_DIGEST_LENGTH);
 	MD5((unsigned char*)FileBuffer.c_str(), SizeLastBlock, ResultingHash);
-	PrintMD5ToFile(ResultingHash, fout);
-	fout << " ";
+	Hash_t HashString = HashToString(ResultingHash);
+	std::cout << HashString << "\n";
+	fout << std::hex << HashString << " ";
+	// Hash_t HashString = (const char *)ResultingHash;
+	// fout << HashString << " ";
 	munmap((void*)FileBuffer.c_str(), SizeLastBlock);
-	std::string HashString((char*)ResultingHash);
+	
 	DataBase[HashString] = make_pair(NumberBlocks - 1, File);
 
 	fout.close();
 }
 
+
+void LoadData(std::string Path) {
+	std::ifstream fin(Path.c_str());
+	int BlockNumbers;
+	fin >> BlockNumbers;
+	for (int i = 0; i < BlockNumbers; ++i) {
+		Hash_t Hash;
+		fin >> std::hex >> Hash;
+		std::cout << Hash << "\n";
+		int Position;
+		std::string FileName;
+		fin >> Position >> FileName;
+		DataBase[Hash] = make_pair(Position, FileName);
+	}
+	fin.close();
+}
+
+void SaveData(std::string Path) {
+	std::cout << "Saving data\n";
+	std::ofstream fout(Path.c_str());
+	int BlockNumbers = DataBase.size();
+	fout << BlockNumbers << "\n";
+	ClientDataBase_t::iterator it;
+	for (it = DataBase.begin(); it != DataBase.end(); ++it) {
+		fout << std::hex << (*it).first << " ";
+		fout << std::hex << (*it).second.first << " " << (*it).second.second << "\n";
+	}
+	fout.close();
+}
+
 int main() {
+
+	LoadData(std::string("ClientDataBase.txt"));
 	
 	ClientIP = "127.0.0.1";
 
@@ -195,8 +340,10 @@ int main() {
 
 		switch (IdCommand) {
 			case 0: {
-				if (ClientIsFree)
+				if (ClientIsFree) {
+					SaveData(std::string("ClientDataBase.txt"));
 					exit(0);
+				}
 				else 
 					std::cout << "Client has been working yet. Wait, please.\n";
 				break;
@@ -233,6 +380,7 @@ int main() {
 
 		std::cout << "while_end\n\n";
 	}
+	SaveData(std::string("ClientDataBase.txt"));
 
 
 	return 0;
