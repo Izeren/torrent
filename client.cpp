@@ -41,6 +41,7 @@ bool ClientIsFree = true, Error = 0;
 int IdCommand = NumberCommands;
 int FD;//FileDescriptor
 struct sockaddr_in ServAddr;
+unsigned char ResultingHash[MD5_DIGEST_LENGTH];
 
 typedef std::string Hash_t;////////////////////////////потом убрать
 typedef std::map<Hash_t, std::pair<int, std::string> > ClientDataBase_t;
@@ -114,72 +115,6 @@ void* UploadRequest(void *p) {
 	close(FD);
 }
 
-// void* CreateRequest(void *p) {
-// 	unsigned char ResultingHash[MD5_DIGEST_LENGTH];
-// 	std::string TorrentFile;
-// 	File = Commands[1];
-// 	TorrentFile = File;
-// 	TorrentFile.erase(TorrentFile.begin() + TorrentFile.find_last_of("."), TorrentFile.end());
-// 	TorrentFile += ".torrent";
-// 	std::cout << TorrentFile << std::endl;
-
-// 	std::ofstream fout(TorrentFile.c_str());
-
-// 	int FD = open(File.c_str(), O_RDONLY);
-// 	if (FD < 0)
-// 		exit(-1);
-// 	FileSize = GetSizeByFD(FD);
-
-// 	int SizeLastBlock = FileSize % BlockSize;
-// 	if (SizeLastBlock == 0)
-// 		SizeLastBlock = BlockSize;
-
-// 	std::string FileBuffer;
-
-// 	int NumberBlocks = FileSize / BlockSize; 
-// 	if (FileSize % BlockSize > 0)
-// 		++NumberBlocks;
-
-// 	fout << NumberBlocks << "\n";
-
-// 	for (int i = 0; i < NumberBlocks - 1; ++i) {
-// 		FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, i * BlockSize);
-// 		memset(ResultingHash, 0, MD5_DIGEST_LENGTH);
-// 		MD5((unsigned char*)FileBuffer.c_str(), BlockSize, ResultingHash);
-// 		Hash_t HashString = HashToString(ResultingHash);
-// 		if (i == 0) {
-// 			std::ofstream testout("First_block");
-// 			for (int j = 0; j < BlockSize; ++j) {
-// 				testout << std::hex << (int) FileBuffer[j];
-// 			}
-
-// 			testout << "\n\n\n";
-// 			testout << HashString;
-// 			testout.close();
-// 		}
-// 		std::cout << std::endl;
-// 		std::cout << HashString << "\n";
-// 		fout << std::hex << HashString << " ";
-// 		// Hash_t HashString = (const char *) ResultingHash;
-// 		// fout << HashString << " ";
-// 		munmap((void*)FileBuffer.c_str(), BlockSize);
-// 		DataBase[HashString] = make_pair(i, File);
-// 	}
-// 	FileBuffer = (char*)mmap(0, SizeLastBlock, PROT_READ, MAP_SHARED, FD, BlockSize * (NumberBlocks - 1));
-// 	memset(ResultingHash, 0, MD5_DIGEST_LENGTH);
-// 	MD5((unsigned char*)FileBuffer.c_str(), SizeLastBlock, ResultingHash);
-// 	Hash_t HashString = HashToString(ResultingHash);
-// 	std::cout << HashString << "\n";
-// 	fout << std::hex << HashString << " ";
-// 	// Hash_t HashString = (const char *)ResultingHash;
-// 	// fout << HashString << " ";
-// 	munmap((void*)FileBuffer.c_str(), SizeLastBlock);
-	
-// 	DataBase[HashString] = make_pair(NumberBlocks - 1, File);
-
-// 	fout.close();
-// }
-
 std::string GetTorrentName(std::string &File) {
 
 	std::string TorrentFile = File;
@@ -193,22 +128,24 @@ int CalculateLastBlockSize() {
 	int SizeLastBlock = FileSize % BlockSize;
 	if (SizeLastBlock == 0)
 		SizeLastBlock = BlockSize;
-	return SizeLastBlock	
+	return SizeLastBlock;
 }
 
 int CalculateNumberBlocks() {
 	return FileSize / BlockSize + (int) (FileSize % BlockSize > 0);
 }
 
-void MakeHashOfFileBlock(std::string &File, int BlockID, Hash_t &Hash) {
-	FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, Block_ID * BlockSize);
-	MD5((unsigned char*)FileBuffer.c_str(), BlockSize, ResultingHash);
-	Hash_t Hash = HashToString(ResultingHash);
+void MakeHashOfFileBlock(int FD, int BlockID, Hash_t &Hash) {
+	char *FileBuffer;
+	FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, BlockID * BlockSize);
+	MD5((unsigned char*)FileBuffer, BlockSize, ResultingHash);
+	munmap((void*)FileBuffer, BlockSize);
+	Hash = HashToString(ResultingHash);
 }
 
 
 void* CreateRequest(void *p) {
-	unsigned char ResultingHash[MD5_DIGEST_LENGTH];
+	
 	File = Commands[1];
 
 	std::string TorrentFile = GetTorrentName(File);
@@ -224,44 +161,20 @@ void* CreateRequest(void *p) {
 	FileSize = GetSizeByFD(FD);
 	int NumberBlocks = CalculateNumberBlocks();
 	int SizeLastBlock = CalculateLastBlockSize();
-	std::string FileBuffer;
+	char *FileBuffer;
 
 	fout << NumberBlocks << "\n";
+	Hash_t HashString;
 
 	for (int i = 0; i < NumberBlocks - 1; ++i) {
-		FileBuffer = (char*)mmap(0, BlockSize, PROT_READ, MAP_SHARED, FD, i * BlockSize);
-		memset(ResultingHash, 0, MD5_DIGEST_LENGTH);
-		MD5((unsigned char*)FileBuffer.c_str(), BlockSize, ResultingHash);
-		Hash_t HashString = HashToString(ResultingHash);
-		if (i == 0) {
-			std::ofstream testout("First_block");
-			for (int j = 0; j < BlockSize; ++j) {
-				testout << std::hex << (int) FileBuffer[j];
-			}
-
-			testout << "\n\n\n";
-			testout << HashString;
-			testout.close();
-		}
-		std::cout << std::endl;
-		std::cout << HashString << "\n";
-		fout << std::hex << HashString << " ";
-		// Hash_t HashString = (const char *) ResultingHash;
-		// fout << HashString << " ";
-		munmap((void*)FileBuffer.c_str(), BlockSize);
-		DataBase[HashString] = make_pair(i, File);
-	}
-	FileBuffer = (char*)mmap(0, SizeLastBlock, PROT_READ, MAP_SHARED, FD, BlockSize * (NumberBlocks - 1));
-	memset(ResultingHash, 0, MD5_DIGEST_LENGTH);
-	MD5((unsigned char*)FileBuffer.c_str(), SizeLastBlock, ResultingHash);
-	Hash_t HashString = HashToString(ResultingHash);
-	std::cout << HashString << "\n";
-	fout << std::hex << HashString << " ";
-	// Hash_t HashString = (const char *)ResultingHash;
-	// fout << HashString << " ";
-	munmap((void*)FileBuffer.c_str(), SizeLastBlock);
 	
+		MakeHashOfFileBlock(FD, i, HashString);
+		DataBase[HashString] = make_pair(i, File);
+		fout << HashString << " ";
+	}
+	MakeHashOfFileBlock(FD, NumberBlocks - 1, HashString);
 	DataBase[HashString] = make_pair(NumberBlocks - 1, File);
+	fout << HashString;
 
 	fout.close();
 }
