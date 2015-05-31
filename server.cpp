@@ -171,7 +171,11 @@ void *ClientsProcessing(void *argv) {
 				Hash_t Hash;
 				ReceiveStr(confd, Hash);
 				std::cout << "Hash received: " << Hash << "\n";
-				DataBase[Hash].push_back(std::make_pair(IP, Port));
+				std::vector<Addr_t> &Addrs = DataBase[Hash];
+				std::pair<Port_t, IP_t> Addr = std::make_pair(Port, IP);
+				if (std::find(Addrs.begin(), Addrs.end(), Addr) == Addrs.end()) {
+					Addrs.push_back(Addr);
+				}
 			}
 		}	
 
