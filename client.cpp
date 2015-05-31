@@ -38,9 +38,11 @@ std::string File;
 int FileSize;
 list UserCommands, Commands;
 bool ClientIsFree = true, Error = 0;
+bool STOP_LISTENING = false;
 int IdCommand = NumberCommands;
 int FD;//FileDescriptor
 struct sockaddr_in ServAddr;
+struct sockaddr_in ClientAddr;
 unsigned char ResultingHash[MD5_DIGEST_LENGTH];
 
 typedef std::string Hash_t;////////////////////////////потом убрать
@@ -78,6 +80,28 @@ unsigned long GetSizeByFD(int FD) {
 		exit(-1);
 	else 
 		return StatBuf.st_size;
+}
+
+void *Listener(void *p) {
+	ClientIP = "127.0.0.1";
+
+	memset(&ClientAddr, 0, sizeof(ClientAddr)); //set all bits to 0;
+	ClientAddr.sin_family = AF_INET; //IPV4
+	ClientAddr.sin_port = htons(atoi(ClientPort.c_str())); //port of client
+	ClientAddr.sin_addr.s_addr = INADDR_ANY;
+	// new socket to listen other clients
+	int AnswerSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); //open socket
+	bind (AnswerSochet, (const sockaddr *) &ClientAddr, sizeof(ClientAddr));
+	listen(AnswerSocket, 10);
+
+	while (!STOP_LISTENING) {
+		sockaddr_in Asker;
+		int AnswerDescriptor = accept(AnswerSocket, 0, 0);
+		Hash_t Hash;
+		ReceiveStr(Hash);
+	}
+
+
 }
 
 void* DownloadRequest(void *p) {
