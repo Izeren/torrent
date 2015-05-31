@@ -1,5 +1,7 @@
 #include "msg.h"
 #include <iostream>
+#include <errno.h>
+#include <stdio.h>
 
 int SendStr(int ConnectionFD, const std::string &Msg) {
 	int Len = Msg.size();

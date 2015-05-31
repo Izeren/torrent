@@ -1,9 +1,9 @@
 All: client
 client: client.o msg.o stringf.o
-	g++ -o client client.o msg.o stringf.o -lpthread -lcrypto
+	g++ -g -o client client.o msg.o stringf.o -lpthread -lcrypto
 client.o: client.cpp
-	g++ -c client.cpp -lcrypto
+	g++ -g -c client.cpp -lcrypto
 msg.o: msg.cpp
-	g++ -c msg.cpp
+	g++ -g -c msg.cpp
 stringf.o: stringf.cpp
-	g++ -c stringf.cpp
+	g++ -g -c stringf.cpp

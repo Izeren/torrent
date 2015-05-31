@@ -12,12 +12,7 @@
 #include <fstream>
 #include <utility>
 #include <iterator>
-
-typedef std::string Hash_t;
-typedef std::string Port_t;
-typedef std::string IP_t;
-typedef std::pair<Port_t, IP_t> Addr_t;
-typedef std::map<Hash_t, std::vector<Addr_t> > DataBase_t;
+#include "types.h"
 
 int NOT_END_OF_WORK = 1;
 DataBase_t DataBase;
@@ -78,10 +73,10 @@ void InitServerAddr(uint Port, sockaddr_in &servAddr) {
 }
 
 void InitClientAddr(uint Port, unsigned IP, sockaddr_in &ClientAddr) {
-	memset(&ClientAddr, 0, sizeof(ClientAddr)); //set all bits to 0;
-	ClientAddr.sin_family = AF_INET; //IPV4
-	ClientAddr.sin_port = htons(Port); //example of port
-	ClientAddr.sin_addr.s_addr = htonl(IP); //accept all users	
+	memset(&ClientAddr, 0, sizeof(ClientAddr));
+	ClientAddr.sin_family = AF_INET;
+	ClientAddr.sin_port = htons(Port);
+	ClientAddr.sin_addr.s_addr = htonl(IP);
 }
 
 
