@@ -52,6 +52,7 @@ std::vector<Port_t> Ports;
 std::vector<IP_t> IPs;
 pthread_t* Pthreads;
 std::vector<bool> UsedPthread;
+bool STOP_LISTENING = false; 
 
 typedef std::map<Hash_t, std::pair<int, std::string> > ClientDataBase_t;
 
@@ -87,7 +88,7 @@ void LoadData(std::string Path);
 
 void SaveData(std::string Path);
 
-
+void *Listener(void *p);
 
 int main() {
 
@@ -181,6 +182,44 @@ int main() {
 	return 0;
 }
 
+void *Listener(void *p) {
+	ClientIP = "127.0.0.1";
+	sockaddr_in ClientAddr;
+
+	memset(&ClientAddr, 0, sizeof(ClientAddr)); //set all bits to 0;
+	ClientAddr.sin_family = AF_INET; //IPV4
+	ClientAddr.sin_port = htons(atoi(ClientPort.c_str())); //port of client
+	ClientAddr.sin_addr.s_addr = INADDR_ANY;
+	// new socket to listen other clients
+	int AnswerSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); //open socket
+	bind (AnswerSocket, (const sockaddr *) &ClientAddr, sizeof(ClientAddr));
+	listen(AnswerSocket, 10);
+
+	while (!STOP_LISTENING) {
+		sockaddr_in Asker;
+		int AnswerDescriptor = accept(AnswerSocket, 0, 0);
+		Hash_t Hash;
+
+		ReceiveStr(AnswerDescriptor, Hash);
+		int SizeOfBlock = ReceiveInt(AnswerDescriptor);
+		std::pair<int, std::string> Location;
+		int LocalFile = open(Location.second.c_str(), O_RDONLY);
+		Hash_t OurHash;
+		MakeHashOfFileBlock(LocalFile, Location.first, OurHash, SizeOfBlock);
+		if (OurHash != Hash) {
+			std::cout << "Fatal error, mismatch of hashes in listener\n";
+			close(AnswerDescriptor);
+			continue;
+		}
+		char *FileBuffer = (char*)mmap(0, SizeOfBlock, PROT_READ, MAP_SHARED, FD, Location.first * BlockSize);
+		SendMsg(AnswerDescriptor, FileBuffer, SizeOfBlock);
+		munmap((void*) FileBuffer, SizeOfBlock);
+		close(AnswerDescriptor);
+	}
+
+
+}
+
 void printMD5(unsigned char *Buffer) {
 
 	for (int i = 0; i < MD5_DIGEST_LENGTH; ++i) {
@@ -228,7 +267,7 @@ void* DownloadBlock(void *p) {
 	memset(&AnotherClient, 0, sizeof(AnotherClient));
 
 	AnotherClient.sin_family = AF_INET;
-	AnotherClient.sin_port = htons(atoi(Ports[IndexBlock]));
+	AnotherClient.sin_port = htons(atoi(Ports[IndexBlock].c_str()));
 
 	struct in_addr AnotherClientAddr;
 
@@ -386,7 +425,7 @@ void* CreateRequest(void *p) {
 
 	std::ofstream fout(TorrentFile.c_str());
 
-	int FD = open(File.c_str(), O_RDONLY);
+	int FD = open(File.c_str(), O_RDONLY | O_LARGEFILE);
 	if (FD < 0)
 		exit(-1);
 
@@ -412,6 +451,8 @@ void* CreateRequest(void *p) {
 	fout << HashString << " ";
 
 	fout << FileSize;
+
+	close(FD);
 
 	fout.close();
 }

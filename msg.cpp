@@ -112,4 +112,3 @@ void SendLong(int FD, long Number) {
 	*Buffer = htonl(Number);
 	SendMsg(FD, (const void *) Buffer, sizeof(long));
 }
-
