@@ -34,8 +34,8 @@ std::string ClientIP;
 std::string ClientPort;
 
 typedef std::string Hash_t;////////////////////////////потом убрать
-typedef std::string Port_t;
-typedef std::string IP_t;
+typedef std::string Port_t;///////////////////
+typedef std::string IP_t;////////////////////
 
 std::string Command;
 std::string File;
@@ -178,23 +178,25 @@ int main() {
 	}
 	SaveData(std::string("ClientDataBase.txt"));
 
-
 	return 0;
 }
 
 void printMD5(unsigned char *Buffer) {
+
 	for (int i = 0; i < MD5_DIGEST_LENGTH; ++i) {
 		std::cout << std::hex << (int) Buffer[i];
 	}
 }
 
 void PrintMD5ToFile(unsigned char *Buffer, std::ofstream &out) {
+
 	for (int i = 0; i < MD5_DIGEST_LENGTH; ++i) {
 		out << std::hex << (int) Buffer[i];
 	}	
 }
 
 std::string HashToString(unsigned char *Buffer) {
+
 	std::stringstream temp;
 	for (int i = 0; i < MD5_DIGEST_LENGTH; ++i) {
 		temp << std::hex << (int) Buffer[i];
@@ -206,6 +208,7 @@ std::string HashToString(unsigned char *Buffer) {
 
 //Get size of file descriptor
 unsigned long GetSizeByFD(int FD) {
+
 	struct stat StatBuf;
 	if (fstat(FD, &StatBuf) < 0)
 		exit(-1);
@@ -214,9 +217,28 @@ unsigned long GetSizeByFD(int FD) {
 }
 
 void* DownloadBlock(void *p) {
-	int IndexPthread = *((int*)p);
-	int IndexBlock = *((int*)p + 1);
-	int SizeOfCurBlock = *((int*)p + 2);
+
+	int *a = (int*)p;
+
+	int IndexPthread = *a;
+	int IndexBlock = *(a + 1);
+	int SizeOfCurBlock = *(a + 2);
+
+	sockaddr_in AnotherClient;
+	memset(&AnotherClient, 0, sizeof(AnotherClient));
+
+	AnotherClient.sin_family = AF_INET;
+	AnotherClient.sin_port = htons(atoi(Ports[IndexBlock]));
+
+	struct in_addr AnotherClientAddr;
+
+	inet_aton(IPs[IndexBlock].c_str(), &AnotherClientAddr);
+	AnotherClient.sin_addr.s_addr = AnotherClientAddr.s_addr;
+
+	int ConnectionSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+	connect(ConnectionSocket, (const sockaddr *) &AnotherClientAddr, sizeof(AnotherClientAddr));
+
 
 }
 
@@ -328,6 +350,7 @@ std::string GetTorrentName(std::string &File) {
 }
 
 int CalculateLastBlockSize(int FileSize) {
+
 	int SizeOfLastBlock = FileSize % BlockSize;
 
 	if (SizeOfLastBlock == 0)
@@ -342,6 +365,7 @@ int CalculateNumberBlocks(int FileSize) {
 }
 
 void MakeHashOfFileBlock(int FD, int BlockID, Hash_t &Hash, int SizeOfCurBlock) {
+
 	char *FileBuffer;
 	FileBuffer = (char*)mmap(0, SizeOfCurBlock, PROT_READ, MAP_SHARED, FD, BlockID * BlockSize);
 
@@ -394,6 +418,7 @@ void* CreateRequest(void *p) {
 
 
 void LoadData(std::string Path) {
+
 	std::ifstream fin(Path.c_str());
 
 	int NumberBlocks;
@@ -415,6 +440,7 @@ void LoadData(std::string Path) {
 }
 
 void SaveData(std::string Path) {
+
 	std::cout << "Saving data\n";
 	std::ofstream fout(Path.c_str());
 
