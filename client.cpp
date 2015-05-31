@@ -42,10 +42,11 @@ std::string File;
 list UserCommands, Commands;
 bool ClientIsFree = true, Error = 0;
 int IdCommand = NumberCommands;
-int FD;//FileDescriptor
+int ServerDescriptor;//FileDescriptor
 int NumberPthreads = 10;
 struct sockaddr_in ServAddr;
 unsigned char ResultingHash[MD5_DIGEST_LENGTH];
+int FileDescriptor;
 
 std::vector<Hash_t> Hashes;
 std::vector<Port_t> Ports;
@@ -66,7 +67,7 @@ void PrintMD5ToFile(unsigned char *Buffer, std::ofstream &out);
 
 std::string HashToString(unsigned char *Buffer);
 
-unsigned long GetSizeByFD(int FD);
+unsigned long GetSizeByFD(int ServerDescriptor);
 
 void* DownloadBlock(void *p);
 
@@ -80,7 +81,7 @@ int CalculateLastBlockSize(int FileSize);
 
 int CalculateNumberBlocks(int FileSize);
 
-void MakeHashOfFileBlock(int FD, int BlockID, Hash_t &Hash, int SizeOfCurBlock);
+void MakeHashOfFileBlock(int ServerDescriptor, int BlockID, Hash_t &Hash, int SizeOfCurBlock);
 
 void* CreateRequest(void *p);
 
@@ -108,7 +109,7 @@ int main() {
 	ServAddr.sin_addr.s_addr = ServIP.s_addr;
 
 
-	FD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); //open socket
+	ServerDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); //open socket
 
 	Command.reserve(BufferSize);
 	UserCommands.resize(NumberCommands);
@@ -202,21 +203,25 @@ void *Listener(void *p) {
 
 		ReceiveStr(AnswerDescriptor, Hash);
 		int SizeOfBlock = ReceiveInt(AnswerDescriptor);
-		std::pair<int, std::string> Location;
+
+		std::pair<int, std::string> Location = DataBase[Hash];
 		int LocalFile = open(Location.second.c_str(), O_RDONLY);
+
 		Hash_t OurHash;
 		MakeHashOfFileBlock(LocalFile, Location.first, OurHash, SizeOfBlock);
+
 		if (OurHash != Hash) {
 			std::cout << "Fatal error, mismatch of hashes in listener\n";
 			close(AnswerDescriptor);
 			continue;
 		}
-		char *FileBuffer = (char*)mmap(0, SizeOfBlock, PROT_READ, MAP_SHARED, FD, Location.first * BlockSize);
+
+		char *FileBuffer = (char*)mmap(0, SizeOfBlock, PROT_READ, MAP_SHARED, ServerDescriptor, Location.first * BlockSize);
 		SendMsg(AnswerDescriptor, FileBuffer, SizeOfBlock);
+
 		munmap((void*) FileBuffer, SizeOfBlock);
 		close(AnswerDescriptor);
 	}
-
 
 }
 
@@ -246,10 +251,10 @@ std::string HashToString(unsigned char *Buffer) {
 }
 
 //Get size of file descriptor
-unsigned long GetSizeByFD(int FD) {
+unsigned long GetSizeByFD(int ServerDescriptor) {
 
 	struct stat StatBuf;
-	if (fstat(FD, &StatBuf) < 0)
+	if (fstat(ServerDescriptor, &StatBuf) < 0)
 		exit(-1);
 	else 
 		return StatBuf.st_size;
@@ -278,12 +283,23 @@ void* DownloadBlock(void *p) {
 
 	connect(ConnectionSocket, (const sockaddr *) &AnotherClientAddr, sizeof(AnotherClientAddr));
 
+	SendStr(ConnectionSocket, Hashes[IndexBlock]);
+	SendInt(ConnectionSocket, SizeOfCurBlock);
 
+	char *FileBuffer;
+	FileBuffer = (char*)mmap(0, SizeOfCurBlock, PROT_WRITE, MAP_SHARED, FileDescriptor, IndexBlock * BlockSize);
+
+	ReceiveMsg(ConnectionSocket, FileBuffer, SizeOfCurBlock);
+
+	munmap((void*)FileBuffer, SizeOfCurBlock);
+	
+
+	UsedPthread[IndexPthread] = 0;
 }
 
 void* DownloadRequest(void *p) {
 	
-	connect(FD, (const sockaddr *) &ServAddr, sizeof(ServAddr));
+	connect(ServerDescriptor, (const sockaddr *) &ServAddr, sizeof(ServAddr));
 
 	std::ifstream fin(Commands[1].c_str());
 
@@ -294,22 +310,25 @@ void* DownloadRequest(void *p) {
 	Ports.resize(NumberBlocks);
 	IPs.resize(NumberBlocks);
 				
-	SendStr(FD, Commands[0]);
-	SendInt(FD, NumberBlocks);
+	SendStr(ServerDescriptor, Commands[0]);
+	SendInt(ServerDescriptor, NumberBlocks);
 
 	for (int  i = 0; i < NumberBlocks; ++i) {
 		fin >> Hashes[i];
-		SendStr(FD, Hashes[i]);
-		ReceiveStr(FD, IPs[i]);
-		ReceiveStr(FD, Ports[i]);
+		SendStr(ServerDescriptor, Hashes[i]);
+		ReceiveStr(ServerDescriptor, IPs[i]);
+		ReceiveStr(ServerDescriptor, Ports[i]);
 	}
 
 	int FileSize;
 	fin >> FileSize;
 
+	std::string FileName = Commands[1];
+	FileName.erase(FileName.begin() + FileName.find_last_of("."), FileName.end());
 	int SizeOfLastBlock = CalculateLastBlockSize(FileSize);
 
 	//memory/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	FileDescriptor = creat(FileName.c_str(), 0644);
 
 	Pthreads = new pthread_t[NumberPthreads];
 	UsedPthread.resize(NumberPthreads, 0);
@@ -349,40 +368,41 @@ void* DownloadRequest(void *p) {
 	delete []Args;
 	delete []Pthreads;
 
-	close(FD);
+	close(FileDescriptor);
+	close(ServerDescriptor);
 }
 
 void* UploadRequest(void *p) {
 
-	connect(FD, (const sockaddr *) &ServAddr, sizeof(ServAddr));
+	connect(ServerDescriptor, (const sockaddr *) &ServAddr, sizeof(ServAddr));
 
-	SendStr(FD, Commands[0]);
-	SendStr(FD, ClientIP);
-	SendStr(FD, ClientPort);
+	SendStr(ServerDescriptor, Commands[0]);
+	SendStr(ServerDescriptor, ClientIP);
+	SendStr(ServerDescriptor, ClientPort);
 
 	File = Commands[1];
 	std::ifstream fin(File.c_str());
 	int NumberBlocks;
 	fin >> NumberBlocks;
 
-	SendInt(FD, NumberBlocks);
+	SendInt(ServerDescriptor, NumberBlocks);
 
 	for (int i = 0; i < NumberBlocks; ++i) {
 		Hash_t Hash;
 		fin >> Hash;
-		SendStr(FD, Hash);
+		SendStr(ServerDescriptor, Hash);
 	}
 	fin.close();
 
-	SendStr(FD, Commands[0]);
+	SendStr(ServerDescriptor, Commands[0]);
 
-	close(FD);
+	close(ServerDescriptor);
 }
 
 std::string GetTorrentName(std::string &File) {
 
 	std::string TorrentFile = File;
-	TorrentFile.erase(TorrentFile.begin() + TorrentFile.find_last_of("."), TorrentFile.end());
+	//TorrentFile.erase(TorrentFile.begin() + TorrentFile.find_last_of("."), TorrentFile.end());
 	TorrentFile += ".torrent";
 
 	return TorrentFile;
