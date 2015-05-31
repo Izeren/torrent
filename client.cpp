@@ -21,6 +21,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include "types.h"
 
 const int BufferSize = 100;
 const int BlockSize = 4 * 1024;
@@ -33,14 +34,10 @@ const int NumberCommands = 4;
 std::string ClientIP;
 std::string ClientPort;
 
-typedef std::string Hash_t;////////////////////////////потом убрать
-typedef std::string Port_t;///////////////////
-typedef std::string IP_t;////////////////////
-
 std::string Command;
 std::string File;
 list UserCommands, Commands;
-bool ClientIsFree = true, Error = 0;
+bool ClientIsFree = true;
 int IdCommand = NumberCommands;
 int ServerDescriptor;//FileDescriptor
 int NumberPthreads = 10;
@@ -54,9 +51,6 @@ std::vector<IP_t> IPs;
 pthread_t* Pthreads;
 std::vector<bool> UsedPthread;
 bool STOP_LISTENING = false; 
-
-typedef std::map<Hash_t, std::pair<int, std::string> > ClientDataBase_t;
-
 
 
 ClientDataBase_t DataBase;
@@ -111,6 +105,10 @@ int main() {
 
 	ServerDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); //open socket
 
+	pthread_t ListenPthread;
+	pthread_create(&ListenPthread, NULL, Listener, NULL);
+				
+
 	Command.reserve(BufferSize);
 	UserCommands.resize(NumberCommands);
 	UserCommands[0] = "exit";
@@ -139,6 +137,8 @@ int main() {
 		switch (IdCommand) {
 			case 0: {
 				if (ClientIsFree) {
+					STOP_LISTENING = true;
+					pthread_join(ListenPthread, NULL);
 					SaveData(std::string("ClientDataBase.txt"));
 					exit(0);
 				}
@@ -149,9 +149,11 @@ int main() {
 
 			case 1: {
 						//////////DOWNLOAD File
+				ClientIsFree = false;
 				pthread_t PthreadDownload;
 				pthread_create(&PthreadDownload, NULL, DownloadRequest, NULL);
 				pthread_join(PthreadDownload, NULL);
+				ClientIsFree = true;
 				break;
 			}
 
