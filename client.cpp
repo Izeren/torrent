@@ -24,9 +24,11 @@
 #include "types.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <cstdlib>
+ 
 
 const int BufferSize = 100;
-const int BlockSize = 4 * 1024;
+const int BlockSize = 256 * 1024;
 const int NumberCommands = 4;
 //Commands: 1 - download file;
 //			2 - upload file;
@@ -87,13 +89,22 @@ void SaveData(std::string Path);
 
 void *Listener(void *p);
 
+
 int main() {
 
 	std::cout <<  "Enter port of client: ";
 	std::cin >> ClientPort;
+
+	WorkingDirectory = "Client:" + ClientPort + "/";
+	int DirError = mkdir(WorkingDirectory.c_str(), 0770);
+	DirError = mkdir((WorkingDirectory + "Torrents").c_str(), 0770);
+	DirError = mkdir((WorkingDirectory + "Files").c_str(), 0770);
+	DirError = mkdir((WorkingDirectory + "ClientDataBase").c_str(), 0770);
+
 	WorkingDirectory = "Client:" + ClientPort + "/";
 	LoadData(WorkingDirectory + "ClientDataBase/DataBase.txt");
 	
+
 	ClientIP = "127.0.0.1";
 
 	memset(&ServAddr, 0, sizeof(ServAddr)); //set all bits to 0;
@@ -207,19 +218,27 @@ void *Listener(void *p) {
 
 
 		std::pair<int, std::string> Location = DataBase[Hash];
+		//std::cout << "Location: " << Location.first << " " << Location.second <<std::endl;
 		std::string Path = WorkingDirectory + "Files/" + Location.second;
 		int LocalFile = open(Path.c_str(), O_RDONLY);
 
 		Hash_t OurHash;
+		//std::cout << "internal check: \n";
+		//std::cout << Path << std::endl;
+		//std::cout << "Local File: " << LocalFile << std::endl;
 		MakeHashOfFileBlock(LocalFile, Location.first, OurHash, SizeOfBlock);
+		//std::cout << "after hashing\n";
 
 		if (OurHash != Hash) {
 			std::cout << "Fatal error, mismatch of hashes in listener\n";
 			close(AnswerDescriptor);
 			continue;
 		}
-
+		//std::cout << "Point1\n";
+		//std::cout << Location.first << " " << Location.second << std::endl;
 		char *FileBuffer = (char*)mmap(0, SizeOfBlock, PROT_READ, MAP_SHARED, LocalFile, Location.first * BlockSize);
+		//std::cout << "Point2\n";
+		
 		SendMsg(AnswerDescriptor, FileBuffer, SizeOfBlock);
 
 		munmap((void*) FileBuffer, SizeOfBlock);
@@ -271,6 +290,9 @@ void* DownloadBlock(void *p) {
 	int IndexBlock = *(a + 1);
 	int SizeOfCurBlock = *(a + 2);
 
+	std::string FileName = File;
+	FileName.erase(FileName.begin() + FileName.find_last_of("."), FileName.end());
+
 	sockaddr_in AnotherClient;
 	memset(&AnotherClient, 0, sizeof(AnotherClient));
 
@@ -290,6 +312,13 @@ void* DownloadBlock(void *p) {
 		perror(0);
 		return 0;
 	}
+
+	// int result = -1;
+	// while(result) {
+	// 	result = connect(ConnectionSocket, (const sockaddr *) &AnotherClient, sizeof(AnotherClient));
+	// 	perror(0);
+	// }
+
 	SendStr(ConnectionSocket, Hashes[IndexBlock]);
 	SendInt(ConnectionSocket, SizeOfCurBlock);
 
@@ -300,12 +329,16 @@ void* DownloadBlock(void *p) {
 	munmap((void*)FileBuffer, SizeOfCurBlock);
 	
 	close(ConnectionSocket);
-	UsedPthread[IndexPthread] = 0;
+
+	UsedPthread[IndexPthread] = false;
 
 	int ServerDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); //open socket
 
-	connect(ServerDescriptor, (const sockaddr *) &ServAddr, sizeof(ServAddr));
-
+	result = connect(ServerDescriptor, (const sockaddr *) &ServAddr, sizeof(ServAddr));
+	//std::cout << "result: " << result << std::endl;
+	if (result == -1) {
+		return 0;
+	}
 	SendStr(ServerDescriptor, "upload");
 	SendStr(ServerDescriptor, ClientIP);
 	SendStr(ServerDescriptor, ClientPort);
@@ -314,16 +347,18 @@ void* DownloadBlock(void *p) {
 
 	close(ServerDescriptor);
 
+	DataBase[Hashes[IndexBlock]] = std::make_pair(IndexBlock, FileName);
 }
 
 void* DownloadRequest(void *p) {
-	
+	 	
 	int ServerDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); //open socket
 
 	connect(ServerDescriptor, (const sockaddr *) &ServAddr, sizeof(ServAddr));
 
 	std::string TorrentFile = Commands[1];
 	std::string TorrentPath = WorkingDirectory + "Torrents/" + TorrentFile;
+	
 	std::ifstream fin(TorrentPath.c_str());
 
 	int NumberBlocks;
@@ -338,6 +373,7 @@ void* DownloadRequest(void *p) {
 
 	for (int  i = 0; i < NumberBlocks; ++i) {
 		fin >> Hashes[i];
+		//std::cout << "Hash: " << Hashes[i] << "\n";
 		SendStr(ServerDescriptor, Hashes[i]);
 		ReceiveStr(ServerDescriptor, Ports[i]);
 		ReceiveStr(ServerDescriptor, IPs[i]);
@@ -348,10 +384,13 @@ void* DownloadRequest(void *p) {
 	int FileSize;
 	fin >> FileSize;
 
-	std::cout << "FileSize: " << FileSize << "\n";
+	//std::cout << "FileSize: " << FileSize << "\n";
 
 	std::string FileName = Commands[1];
+	File = FileName;
 	FileName.erase(FileName.begin() + FileName.find_last_of("."), FileName.end());
+	
+
 	int SizeOfLastBlock = CalculateLastBlockSize(FileSize);
 
 	std::string FilePath = WorkingDirectory + "Files/" + FileName;
@@ -403,7 +442,7 @@ void* DownloadRequest(void *p) {
 	}
 	delete []Args;
 	delete []Pthreads;
-
+	//SaveData(WorkingDirectory + "ClientDataBase/DataBase.txt");
 	close(FileDescriptor);
 }
 
@@ -484,8 +523,10 @@ void* CreateRequest(void *p) {
 
 	std::string Path = WorkingDirectory + "Files/" + File;
 	int FD = open(Path.c_str(), O_RDONLY);
-	if (FD < 0)
-		exit(-1);
+	if (FD < 0) {
+		std::cout << "File not found\n";
+		return 0;
+	}
 
 	int FileSize = GetSizeByFD(FD);
 	int NumberBlocks = CalculateNumberBlocks(FileSize);

@@ -57,7 +57,7 @@ int main() {
 }
 
 int GetRandN(int Number) {
-	return rand() * rand() % Number;
+	return rand() % Number;
 }
 
 int GetRandLR(int Left, int Right) {
@@ -141,14 +141,23 @@ void *ClientsProcessing(void *argv) {
 		if (Command == "download") {
 			std::cout << "Command recognized: download\n";
 			int NumberOfBlocks = ReceiveInt(confd);
+			//std::cout << NumberOfBlocks << std::endl;
 			for (int i = 0; i < NumberOfBlocks; ++i) {
 				Hash_t Hash;
 				ReceiveStr(confd, Hash);
+				//std::cout << Hash << std::endl;
 				std::vector<Addr_t> &AddrVector = DataBase[Hash];
 				int VectorSize = AddrVector.size();
+				//std::cout << "vectorsize: " << VectorSize << std::endl;
+				if (VectorSize == 0) {
+					std::cout << "Wrong Hash\n";
+					break;
+				}
 				int UserNumber = GetRandN(VectorSize);
+				//std::cout << "UserNumber: " << UserNumber << std::endl;
 				SendStr(confd, AddrVector[UserNumber].first);
 				SendStr(confd, AddrVector[UserNumber].second);
+				//std::cout << "AfterSend\n";
 			}
 
 		} else if (Command == "upload") {
@@ -159,8 +168,8 @@ void *ClientsProcessing(void *argv) {
 			ReceiveStr(confd, Port);
 			int NumberOfBlocks = ReceiveInt(confd);
 
-			std::cout << "IP: " << IP << " Port: " << Port << "\n";
-			std::cout << "NumberOfBlocks: " << NumberOfBlocks << "\n";
+			//std::cout << "IP: " << IP << " Port: " << Port << "\n";
+			//std::cout << "NumberOfBlocks: " << NumberOfBlocks << "\n";
 			
 			for (int i = 0; i < NumberOfBlocks; ++i) {
 				Hash_t Hash;
